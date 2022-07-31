@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  namespace: monitoring-ns
+  name: mysql
+spec:
+  replicas: 2
+  serviceName: mysql
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - name: tpc
+              protocol: TCP
+              containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom: 
+               secretKeyRef: 
+                key: ROOT_PASSWORD
+                name: mysecret
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+        - name: mysql-exporter
+          image: prom/mysqld-exporter
+          ports:
+            - name: tpc
+              protocol: TCP
+              containerPort: 9104
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom: 
+               secretKeyRef: 
+                key: ROOT_PASSWORD
+                name: mysecret
+            - name: DATA_SOURCE_NAME
+              value: "root:$(MYSQL_ROOT_PASSWORD)@(mysql:3306)/"
+            - name: collect.global_status
+              value: 'true'
+            - name: collect.info_schema.innodb_metrics
+              value: 'true'
+            - name: collect.auto_increment.columns
+              value: 'true'
+            - name: collect.info_schema.processlist
+              value: 'true'
+            - name: collect.binlog_size
+              value: 'true'
+            - name: collect.info_schema.tablestats
+              value: 'true'
+            - name: collect.global_variables
+              value: 'true'
+            - name: collect.info_schema.query_response_time
+              value: 'true'
+            - name: collect.info_schema.userstats
+              value: 'true'
+            - name: collect.info_schema.tables
+              value: 'true'
+            - name: collect.perf_schema.tablelocks
+              value: 'true'
+            - name: collect.perf_schema.file_events
+              value: 'true'
+            - name: collect.perf_schema.eventswaits
+              value: 'true'
+            - name: collect.perf_schema.indexiowaits
+              value: 'true'
+            - name: collect.perf_schema.tableiowaits
+              value: 'true'
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        storageClassName: standard
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: monitoring-ns
+  labels:
+    app: mysql
+spec:
+  clusterIP: None
+  selector:
+    app: mysql
+  ports:
+    - name: tcp
+      protocol: TCP
+      port: 3306
+    - name: mysql-exporter
+      protocol: TCP
+      port: 9104
